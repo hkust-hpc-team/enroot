@@ -36,7 +36,12 @@ if [ -n "${SLURM_LOCALID-}" ] && ! grep -q "^LOCAL_RANK=" "${ENROOT_ENVIRON}"; t
     printf "LOCAL_RANK=%s\n" "${SLURM_LOCALID}" >> "${ENROOT_ENVIRON}"
 fi
 
-# Matching the behavior of torch.distributed.run: https://github.com/pytorch/pytorch/blob/v1.9.0/torch/distributed/run.py#L521-L532
-if [ "${SLURM_STEP_NUM_TASKS:-1}" -gt "${SLURM_STEP_NUM_NODES:-1}" ] && ! grep -q "^OMP_NUM_THREADS=" "${ENROOT_ENVIRON}"; then
-    printf "OMP_NUM_THREADS=1\n" >> "${ENROOT_ENVIRON}"
+# For pytorch version 2, dataloader can use num_workers to scale, and most workload needs it
+# Setting OMP_NUM_THREADS=1 effectively cap any setting of num_workers to a total of 1 core
+# Only apply this fix to pytorch version 1
+if grep -q "^PYTORCH_VERSION=1" "${ENROOT_ENVIRON}"; then
+    # Matching the behavior of torch.distributed.run: https://github.com/pytorch/pytorch/blob/v1.9.0/torch/distributed/run.py#L5>
+    if [ "${SLURM_NTASKS_PER_NODE:-1}" -gt 1 ] && ! grep -q "^OMP_NUM_THREADS=" "${ENROOT_ENVIRON}"; then
+        printf "OMP_NUM_THREADS=1\n" >> "${ENROOT_ENVIRON}"
+    fi
 fi
